@@ -17,3 +17,7 @@ An inspector-focused iPhone camera app. A marker is visible in the live camera p
 4. Allow Camera and Photos access on first launch.
 
 The project targets iOS 17. A physical iPhone test is required because the simulator cannot validate the real camera capture path.
+
+## Privacy and support
+
+ArrowHead has no account, advertising, analytics, third-party SDKs, or developer-operated cloud service. Its App Store privacy policy and support pages are maintained in `docs/`, and its draft App Store metadata and TestFlight checklist are maintained in `AppStore/`.

@@ -36,6 +36,7 @@ struct ContentView: View {
     @State private var zoomGestureStart: CGFloat = 1
     @State private var captionDraft = ""
     @State private var isCaptionEditing = false
+    @State private var isAboutPresented = false
     @State private var speechPrefix = ""
     @FocusState private var captionEditorFocused: Bool
 
@@ -90,44 +91,61 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $isPreviewPresented) {
             photoPreview
         }
+        .sheet(isPresented: $isAboutPresented) {
+            AboutView()
+        }
     }
 
     private var recentPhotoStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 8) {
-                    if recentPhotos.isEmpty {
-                        Text("拍摄后的照片会显示在这里")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
-                            .frame(width: 220, height: 70)
-                    } else {
-                        ForEach(recentPhotos) { photo in
-                            Button {
-                                selectedPreviewID = photo.id
-                                isPreviewPresented = true
-                            } label: {
-                                Image(uiImage: photo.image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 70, height: 70)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.35)))
+        HStack(spacing: 6) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 8) {
+                        if recentPhotos.isEmpty {
+                            Text("拍摄后的照片会显示在这里")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                                .frame(width: 220, height: 70)
+                        } else {
+                            ForEach(recentPhotos) { photo in
+                                Button {
+                                    selectedPreviewID = photo.id
+                                    isPreviewPresented = true
+                                } label: {
+                                    Image(uiImage: photo.image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 70, height: 70)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.35)))
+                                }
+                                .buttonStyle(.plain)
+                                .id(photo.id)
                             }
-                            .buttonStyle(.plain)
-                            .id(photo.id)
                         }
                     }
+                    .padding(.leading, 10)
                 }
-                .padding(.horizontal, 10)
+                .onChange(of: recentPhotos.count) { _, count in
+                    guard count > 0 else { return }
+                    withAnimation { proxy.scrollTo(recentPhotos.last?.id, anchor: .trailing) }
+                }
             }
-            .frame(height: 82)
-            .background(.black)
-            .onChange(of: recentPhotos.count) { _, count in
-                guard count > 0 else { return }
-                withAnimation { proxy.scrollTo(recentPhotos.last?.id, anchor: .trailing) }
+
+            Button {
+                isAboutPresented = true
+            } label: {
+                Image(systemName: "info.circle.fill")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 54, height: 54)
+                    .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
             }
+            .accessibilityLabel("关于 ArrowHead 和隐私政策")
+            .padding(.trailing, 10)
         }
+        .frame(height: 82)
+        .background(.black)
     }
 
     private var photoPreview: some View {
