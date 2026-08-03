@@ -170,7 +170,7 @@ struct ContentView: View {
                     Button {
                         isPreviewPresented = false
                     } label: {
-                        Label("关闭", systemImage: "xmark")
+                        Label("Close", systemImage: "xmark")
                             .font(.headline.weight(.bold))
                             .frame(minWidth: 90, minHeight: 54)
                             .background(.black.opacity(0.7), in: Capsule())
@@ -179,16 +179,16 @@ struct ContentView: View {
                     Button(role: .destructive) {
                         removeSelectedPreview()
                     } label: {
-                        Label("移除预览", systemImage: "trash.fill")
+                        Label("Remove Preview", systemImage: "trash.fill")
                             .font(.headline.weight(.bold))
-                            .frame(minWidth: 130, minHeight: 54)
+                            .frame(minWidth: 170, minHeight: 54)
                             .background(.black.opacity(0.7), in: Capsule())
                     }
                 }
                 .foregroundStyle(.white)
                 .padding()
                 Spacer()
-                Text("只从顶部预览移除；相册原照片会保留")
+                Text("Removes only from the top preview. The original remains in Photos.")
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -387,41 +387,65 @@ struct ContentView: View {
 
     private var cameraToolbar: some View {
         HStack(spacing: 12) {
-            Menu {
-                ForEach(PhotoRatio.allCases) { ratio in
-                    Button(ratio.rawValue) { photoRatio = ratio }
-                }
-            } label: {
-                cameraToolButton(title: photoRatio.rawValue, icon: "aspectratio")
-            }
-            .disabled(shootingModeLocked)
-
-            Menu {
-                ForEach(CameraFlashMode.allCases) { mode in
-                    Button {
-                        flashMode = mode
-                    } label: {
-                        Label(mode.rawValue, systemImage: mode.systemImage)
-                    }
-                }
-            } label: {
-                cameraToolButton(title: "Flash \(flashMode.rawValue)", icon: flashMode.systemImage)
-            }
-            .disabled(shootingModeLocked)
-
-            Button {
-                let switchingToFront = camera.cameraPosition == .back
-                camera.switchCamera()
-                if switchingToFront {
-                    flashMode = .off
-                }
-            } label: {
-                cameraToolButton(
-                    title: camera.cameraPosition == .back ? "后置镜头" : "前置镜头",
-                    icon: camera.isSwitchingCamera ? "hourglass" : "camera.rotate.fill"
+            if shootingModeLocked {
+                inactiveCameraToolButton(
+                    title: photoRatio.rawValue,
+                    icon: "aspectratio",
+                    accessibilityLabel: "Photo ratio unavailable while mode is locked"
                 )
+            } else {
+                Menu {
+                    ForEach(PhotoRatio.allCases) { ratio in
+                        Button(ratio.rawValue) { photoRatio = ratio }
+                    }
+                } label: {
+                    cameraToolButton(title: photoRatio.rawValue, icon: "aspectratio")
+                }
             }
-            .disabled(shootingModeLocked || isCapturing || camera.isSwitchingCamera)
+
+            if shootingModeLocked {
+                inactiveCameraToolButton(
+                    title: "Flash \(flashMode.rawValue)",
+                    icon: flashMode.systemImage,
+                    accessibilityLabel: "Flash unavailable while mode is locked"
+                )
+            } else {
+                Menu {
+                    ForEach(CameraFlashMode.allCases) { mode in
+                        Button {
+                            flashMode = mode
+                        } label: {
+                            Label(mode.rawValue, systemImage: mode.systemImage)
+                        }
+                    }
+                } label: {
+                    cameraToolButton(title: "Flash \(flashMode.rawValue)", icon: flashMode.systemImage)
+                }
+            }
+
+            if shootingModeLocked || isCapturing || camera.isSwitchingCamera {
+                inactiveCameraToolButton(
+                    title: nil,
+                    icon: camera.isSwitchingCamera ? "hourglass" : "camera.rotate.fill",
+                    iconFont: .title.weight(.bold),
+                    accessibilityLabel: "Switch camera unavailable"
+                )
+            } else {
+                Button {
+                    let switchingToFront = camera.cameraPosition == .back
+                    camera.switchCamera()
+                    if switchingToFront {
+                        flashMode = .off
+                    }
+                } label: {
+                    cameraToolButton(
+                        title: nil,
+                        icon: "camera.rotate.fill",
+                        iconFont: .title.weight(.bold)
+                    )
+                }
+                .accessibilityLabel(camera.cameraPosition == .back ? "Switch to front camera" : "Switch to rear camera")
+            }
 
             Button {
                 if shootingModeLocked {
@@ -436,25 +460,50 @@ struct ContentView: View {
                 }
             } label: {
                 cameraToolButton(
-                    title: shootingModeLocked ? "模式已锁" : "锁定模式",
-                    icon: shootingModeLocked ? "lock.fill" : "lock.open.fill"
+                    title: nil,
+                    icon: shootingModeLocked ? "lock.fill" : "lock.open.fill",
+                    iconFont: .title.weight(.bold)
                 )
             }
+            .accessibilityLabel(shootingModeLocked ? "Unlock shooting mode" : "Lock shooting mode")
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
     }
 
-    private func cameraToolButton(title: String, icon: String) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: icon).font(.headline)
-            Text(title).font(.caption2.weight(.bold)).lineLimit(1)
+    private func cameraToolButton(
+        title: String?,
+        icon: String,
+        iconFont: Font = .headline,
+        isEnabled: Bool = true
+    ) -> some View {
+        VStack(spacing: title == nil ? 0 : 3) {
+            Image(systemName: icon).font(iconFont)
+            if let title {
+                Text(title).font(.caption2.weight(.bold)).lineLimit(1)
+            }
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(isEnabled ? .red : .gray)
         .frame(maxWidth: .infinity)
         .frame(height: 54)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.yellow, lineWidth: 2.5))
+        .background(.black.opacity(isEnabled ? 0.55 : 0.35), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isEnabled ? .yellow : .gray.opacity(0.55), lineWidth: 2.5)
+        )
+    }
+
+    private func inactiveCameraToolButton(
+        title: String?,
+        icon: String,
+        iconFont: Font = .headline,
+        accessibilityLabel: String
+    ) -> some View {
+        Button(action: {}) {
+            cameraToolButton(title: title, icon: icon, iconFont: iconFont, isEnabled: false)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var controls: some View {
@@ -468,7 +517,12 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                controlButton(title: markerKind.rawValue, icon: markerKind.systemImage, active: true)
+                controlButton(
+                    title: markerKind.rawValue,
+                    icon: markerKind.systemImage,
+                    active: true,
+                    isEnabled: !shootingModeLocked
+                )
             }
             .disabled(shootingModeLocked)
 
@@ -485,7 +539,8 @@ struct ContentView: View {
                 controlButton(
                     title: markerEnabled ? "ON" : "OFF",
                     icon: markerEnabled ? "eye.fill" : "eye.slash.fill",
-                    active: markerEnabled
+                    active: markerEnabled,
+                    isEnabled: !shootingModeLocked
                 )
             }
             .disabled(shootingModeLocked)
@@ -497,15 +552,18 @@ struct ContentView: View {
         .background(.black)
     }
 
-    private func controlButton(title: String, icon: String, active: Bool) -> some View {
+    private func controlButton(title: String, icon: String, active: Bool, isEnabled: Bool = true) -> some View {
         VStack(spacing: 5) {
             Image(systemName: icon).font(.title2.weight(.bold))
             Text(title).font(.caption.weight(.bold))
         }
-        .foregroundStyle(active ? .red : .white)
+        .foregroundStyle(isEnabled ? (active ? .red : .white) : .gray)
         .frame(width: 92, height: 62)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(active ? .yellow : .gray, lineWidth: 3))
+        .background(.white.opacity(isEnabled ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isEnabled ? (active ? .yellow : .gray) : .gray.opacity(0.55), lineWidth: 3)
+        )
     }
 
     private func dragGesture(in size: CGSize) -> some Gesture {

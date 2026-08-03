@@ -94,22 +94,15 @@ struct MarkerOverlay: View {
         switch kind {
         case .none:
             EmptyView()
-        case .arrow:
-            RunwayArrow(size: size)
-        case .dot:
-            Circle()
-                .fill(.red)
-                .frame(width: size * 0.24, height: size * 0.24)
+        case .arrow, .dot:
+            ChasingLightMarker(kind: kind, size: size)
         case .circle:
             Circle()
                 .stroke(.red, lineWidth: max(5, size * 0.045))
         case .oval:
-            Ellipse()
-                .stroke(.red, lineWidth: max(5, size * 0.045))
-                .frame(width: size, height: size * 0.62)
+            AmberSegmentedOval(size: size)
         case .square:
-            Rectangle()
-                .stroke(.red, lineWidth: max(5, size * 0.045))
+            BidirectionalSquareLights(size: size)
         case .mosaic:
             MosaicEllipse()
                 .frame(width: size * 0.56, height: size * 0.85)
@@ -117,9 +110,11 @@ struct MarkerOverlay: View {
     }
 }
 
-private struct RunwayArrow: View {
+private struct ChasingLightMarker: View {
+    let kind: MarkerKind
     let size: CGFloat
     private let lightCount = 10
+    private let baseRed = Color(red: 0.62, green: 0.0, blue: 0.0)
 
     var body: some View {
         TimelineView(.periodic(from: .now, by: 0.08)) { timeline in
@@ -128,11 +123,7 @@ private struct RunwayArrow: View {
             ) % lightCount
 
             ZStack {
-                Image(systemName: "arrow.right")
-                    .resizable()
-                    .scaledToFit()
-                    .fontWeight(.black)
-                    .foregroundStyle(Color(red: 0.62, green: 0.0, blue: 0.0))
+                markerShape(color: baseRed)
 
                 HStack(spacing: size * 0.014) {
                     ForEach(0..<lightCount, id: \.self) { index in
@@ -152,14 +143,135 @@ private struct RunwayArrow: View {
                 }
                 .frame(width: size)
                 .mask {
-                    Image(systemName: "arrow.right")
-                        .resizable()
-                        .scaledToFit()
-                        .fontWeight(.black)
+                    markerShape(color: .white)
                 }
-
             }
         }
+    }
+
+    @ViewBuilder
+    private func markerShape(color: Color) -> some View {
+        switch kind {
+        case .arrow:
+            Image(systemName: "arrow.right")
+                .resizable()
+                .scaledToFit()
+                .fontWeight(.black)
+                .foregroundStyle(color)
+        case .dot:
+            Circle()
+                .fill(color)
+                .frame(width: size * 0.24, height: size * 0.24)
+        case .circle:
+            Circle()
+                .stroke(color, lineWidth: max(5, size * 0.045))
+        case .oval:
+            Ellipse()
+                .stroke(color, lineWidth: max(5, size * 0.045))
+                .frame(width: size, height: size * 0.62)
+        case .square:
+            Rectangle()
+                .stroke(color, lineWidth: max(5, size * 0.045))
+        case .none, .mosaic:
+            EmptyView()
+        }
+    }
+}
+
+private struct BidirectionalSquareLights: View {
+    let size: CGFloat
+    private let lightCount = 12
+    private let baseRed = Color(red: 0.58, green: 0.0, blue: 0.0)
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.08)) { timeline in
+            let phase = Int(
+                timeline.date.timeIntervalSinceReferenceDate / 0.105
+            ) % lightCount
+            let forwardHeads = [phase, (phase + lightCount / 2) % lightCount]
+            let reversePhase = (lightCount - 1 - phase + lightCount) % lightCount
+            let reverseHeads = [reversePhase, (reversePhase + lightCount / 2) % lightCount]
+
+            ZStack {
+                squareShape(color: baseRed)
+
+                HStack(spacing: size * 0.012) {
+                    ForEach(0..<lightCount, id: \.self) { index in
+                        let forwardDistance = forwardHeads
+                            .map { ($0 - index + lightCount) % lightCount }
+                            .min() ?? lightCount
+                        let reverseDistance = reverseHeads
+                            .map { (index - $0 + lightCount) % lightCount }
+                            .min() ?? lightCount
+                        let distance = min(forwardDistance, reverseDistance)
+
+                        RoundedRectangle(cornerRadius: size * 0.016)
+                            .fill(.red)
+                            .frame(width: size * 0.064, height: size * 0.96)
+                            .opacity(distance == 0 ? 1 : (distance == 1 ? 0.55 : 0.13))
+                            .brightness(distance == 0 ? 0.24 : 0)
+                            .shadow(
+                                color: distance == 0 ? Color.red.opacity(0.95) : .clear,
+                                radius: distance == 0 ? size * 0.055 : 0
+                            )
+                    }
+                }
+                .frame(width: size)
+                .mask { squareShape(color: .white) }
+            }
+        }
+    }
+
+    private func squareShape(color: Color) -> some View {
+        Rectangle()
+            .stroke(color, lineWidth: max(5, size * 0.045))
+    }
+}
+
+private struct AmberSegmentedOval: View {
+    let size: CGFloat
+    private let lightCount = 12
+    private let amber = Color(red: 1.0, green: 0.31, blue: 0.0)
+    private let baseAmber = Color(red: 0.62, green: 0.16, blue: 0.0)
+
+    var body: some View {
+        TimelineView(.periodic(from: .now, by: 0.1)) { timeline in
+            let forwardLight = Int(
+                timeline.date.timeIntervalSinceReferenceDate / 0.14
+            ) % lightCount
+            let reverseLight = lightCount - 1 - forwardLight
+
+            ZStack {
+                ovalShape(color: baseAmber)
+
+                HStack(spacing: size * 0.012) {
+                    ForEach(0..<lightCount, id: \.self) { index in
+                        let forwardDistance = (forwardLight - index + lightCount) % lightCount
+                        let reverseDistance = (index - reverseLight + lightCount) % lightCount
+                        let distance = min(forwardDistance, reverseDistance)
+                        let lightColor = index.isMultiple(of: 2) ? amber : Color.white
+
+                        RoundedRectangle(cornerRadius: size * 0.016)
+                            .fill(lightColor)
+                            .frame(width: size * 0.064, height: size * 0.60)
+                            .opacity(distance == 0 ? 1 : (distance == 1 ? 0.52 : 0.12))
+                            .brightness(distance == 0 ? 0.18 : 0)
+                            .shadow(
+                                color: distance == 0 ? lightColor.opacity(0.95) : .clear,
+                                radius: distance == 0 ? size * 0.055 : 0
+                            )
+                    }
+                }
+                .frame(width: size)
+                .mask { ovalShape(color: .white) }
+            }
+        }
+    }
+
+    private func ovalShape(color: Color) -> some View {
+        Ellipse()
+            .stroke(color, lineWidth: max(5, size * 0.045))
+            .frame(width: size, height: size * 0.62)
     }
 }
 
