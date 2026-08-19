@@ -6,7 +6,7 @@ final class SpeechInputService: ObservableObject {
     @Published private(set) var isListening = false
     @Published private(set) var errorMessage = ""
 
-    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "zh-CN"))
+    private let recognizer = SFSpeechRecognizer(locale: Locale(identifier: "en-US"))
     private let audioEngine = AVAudioEngine()
     private var request: SFSpeechAudioBufferRecognitionRequest?
     private var task: SFSpeechRecognitionTask?
@@ -36,7 +36,7 @@ final class SpeechInputService: ObservableObject {
                 Task { @MainActor in
                     guard let self else { return }
                     guard speechStatus == .authorized, microphoneAllowed else {
-                        self.errorMessage = "请在设置中允许麦克风和语音识别权限"
+                        self.errorMessage = "Allow Microphone and Speech Recognition access in Settings"
                         return
                     }
                     self.start(onText: onText)
@@ -79,7 +79,7 @@ final class SpeechInputService: ObservableObject {
                 }
             }
         } catch {
-            errorMessage = "无法开始语音输入"
+            errorMessage = "Unable to start voice input"
             stop()
         }
     }

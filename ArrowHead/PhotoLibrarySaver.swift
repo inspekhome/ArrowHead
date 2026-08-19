@@ -12,7 +12,8 @@ struct PhotoLibraryPreview {
 }
 
 enum PhotoLibrarySaver {
-    static let albumName = "Inspection Photos"
+    static let albumName = "Arrow"
+    private static let legacyAlbumName = "Inspection Photos"
 
     @discardableResult
     static func save(_ image: UIImage) async throws -> PhotoSaveResult {
@@ -58,13 +59,7 @@ enum PhotoLibrarySaver {
         let status = await PHPhotoLibrary.requestAuthorization(for: .readWrite)
         guard status == .authorized || status == .limited else { return [] }
 
-        let options = PHFetchOptions()
-        options.predicate = NSPredicate(format: "title = %@", albumName)
-        guard let album = PHAssetCollection.fetchAssetCollections(
-            with: .album,
-            subtype: .any,
-            options: options
-        ).firstObject else { return [] }
+        guard let album = try? await findOrCreateAlbum() else { return [] }
 
         let fetchOptions = PHFetchOptions()
         fetchOptions.sortDescriptors = [NSSortDescriptor(key: "creationDate", ascending: false)]
@@ -114,6 +109,19 @@ enum PhotoLibrarySaver {
             return existing
         }
 
+        let legacyOptions = PHFetchOptions()
+        legacyOptions.predicate = NSPredicate(format: "title = %@", legacyAlbumName)
+        if let legacyAlbum = PHAssetCollection.fetchAssetCollections(
+            with: .album,
+            subtype: .any,
+            options: legacyOptions
+        ).firstObject {
+            try await PHPhotoLibrary.shared().performChanges {
+                PHAssetCollectionChangeRequest(for: legacyAlbum)?.title = albumName
+            }
+            return legacyAlbum
+        }
+
         var placeholder: PHObjectPlaceholder?
         try await PHPhotoLibrary.shared().performChanges {
             let request = PHAssetCollectionChangeRequest.creationRequestForAssetCollection(
@@ -148,7 +156,7 @@ enum PhotoSaveError: LocalizedError {
         case .encodingFailed:
             "The finished picture could not be encoded."
         case .albumCreationFailed:
-            "The Inspection Photos album could not be created."
+            "The Arrow album could not be created."
         case .assetCreationFailed:
             "The photo library did not create the picture."
         }

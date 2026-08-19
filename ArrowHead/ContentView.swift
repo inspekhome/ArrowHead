@@ -7,6 +7,7 @@ private struct RecentPhoto: Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var camera = CameraService()
     @StateObject private var speech = SpeechInputService()
     @AppStorage("selectedMarker") private var storedKind = MarkerKind.arrow.rawValue
@@ -36,6 +37,7 @@ struct ContentView: View {
     @State private var zoomGestureStart: CGFloat = 1
     @State private var captionDraft = ""
     @State private var isCaptionEditing = false
+    @State private var isAboutPresented = false
     @State private var speechPrefix = ""
     @FocusState private var captionEditorFocused: Bool
 
@@ -67,6 +69,16 @@ struct ContentView: View {
         }
         .foregroundStyle(.white)
         .onDisappear { camera.stop() }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .active:
+                camera.restart()
+            case .inactive, .background:
+                camera.stop()
+            @unknown default:
+                break
+            }
+        }
         .task {
             if shootingModeLocked {
                 storedRatio = lockedPhotoRatio
@@ -90,44 +102,61 @@ struct ContentView: View {
         .fullScreenCover(isPresented: $isPreviewPresented) {
             photoPreview
         }
+        .sheet(isPresented: $isAboutPresented) {
+            AboutView()
+        }
     }
 
     private var recentPhotoStrip: some View {
-        ScrollViewReader { proxy in
-            ScrollView(.horizontal, showsIndicators: false) {
-                LazyHStack(spacing: 8) {
-                    if recentPhotos.isEmpty {
-                        Text("拍摄后的照片会显示在这里")
-                            .font(.caption)
-                            .foregroundStyle(.gray)
-                            .frame(width: 220, height: 70)
-                    } else {
-                        ForEach(recentPhotos) { photo in
-                            Button {
-                                selectedPreviewID = photo.id
-                                isPreviewPresented = true
-                            } label: {
-                                Image(uiImage: photo.image)
-                                .resizable()
-                                .scaledToFill()
-                                .frame(width: 70, height: 70)
-                                .clipShape(RoundedRectangle(cornerRadius: 8))
-                                .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.35)))
+        HStack(spacing: 6) {
+            ScrollViewReader { proxy in
+                ScrollView(.horizontal, showsIndicators: false) {
+                    LazyHStack(spacing: 8) {
+                        if recentPhotos.isEmpty {
+                            Text("Captured photos appear here")
+                                .font(.caption)
+                                .foregroundStyle(.gray)
+                                .frame(width: 220, height: 70)
+                        } else {
+                            ForEach(recentPhotos) { photo in
+                                Button {
+                                    selectedPreviewID = photo.id
+                                    isPreviewPresented = true
+                                } label: {
+                                    Image(uiImage: photo.image)
+                                        .resizable()
+                                        .scaledToFill()
+                                        .frame(width: 70, height: 70)
+                                        .clipShape(RoundedRectangle(cornerRadius: 8))
+                                        .overlay(RoundedRectangle(cornerRadius: 8).stroke(.white.opacity(0.35)))
+                                }
+                                .buttonStyle(.plain)
+                                .id(photo.id)
                             }
-                            .buttonStyle(.plain)
-                            .id(photo.id)
                         }
                     }
+                    .padding(.leading, 10)
                 }
-                .padding(.horizontal, 10)
+                .onChange(of: recentPhotos.count) { _, count in
+                    guard count > 0 else { return }
+                    withAnimation { proxy.scrollTo(recentPhotos.last?.id, anchor: .trailing) }
+                }
             }
-            .frame(height: 82)
-            .background(.black)
-            .onChange(of: recentPhotos.count) { _, count in
-                guard count > 0 else { return }
-                withAnimation { proxy.scrollTo(recentPhotos.last?.id, anchor: .trailing) }
+
+            Button {
+                isAboutPresented = true
+            } label: {
+                Image(systemName: "info.circle.fill")
+                    .font(.title2.weight(.bold))
+                    .foregroundStyle(.white)
+                    .frame(width: 54, height: 54)
+                    .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
             }
+            .accessibilityLabel("About Arrow in Picture and privacy policy")
+            .padding(.trailing, 10)
         }
+        .frame(height: 82)
+        .background(.black)
     }
 
     private var photoPreview: some View {
@@ -152,7 +181,7 @@ struct ContentView: View {
                     Button {
                         isPreviewPresented = false
                     } label: {
-                        Label("关闭", systemImage: "xmark")
+                        Label("Close", systemImage: "xmark")
                             .font(.headline.weight(.bold))
                             .frame(minWidth: 90, minHeight: 54)
                             .background(.black.opacity(0.7), in: Capsule())
@@ -161,16 +190,16 @@ struct ContentView: View {
                     Button(role: .destructive) {
                         removeSelectedPreview()
                     } label: {
-                        Label("移除预览", systemImage: "trash.fill")
+                        Label("Remove Preview", systemImage: "trash.fill")
                             .font(.headline.weight(.bold))
-                            .frame(minWidth: 130, minHeight: 54)
+                            .frame(minWidth: 170, minHeight: 54)
                             .background(.black.opacity(0.7), in: Capsule())
                     }
                 }
                 .foregroundStyle(.white)
                 .padding()
                 Spacer()
-                Text("只从顶部预览移除；相册原照片会保留")
+                Text("Removes only from the top preview. The original remains in Photos.")
                     .font(.subheadline.weight(.semibold))
                     .padding(.horizontal, 16)
                     .padding(.vertical, 10)
@@ -207,9 +236,9 @@ struct ContentView: View {
             ZStack {
                 if camera.permissionDenied {
                     ContentUnavailableView(
-                        "需要相机权限",
+                        "Camera Access Required",
                         systemImage: "camera.fill",
-                        description: Text("请在 iPhone 设置中允许 ArrowHead 使用相机。")
+                        description: Text("Allow Arrow in Picture to use the camera in iPhone Settings.")
                     )
                 } else {
                     CameraPreview(
@@ -259,7 +288,7 @@ struct ContentView: View {
                         VStack(spacing: 4) {
                             HStack(spacing: 10) {
                                 TextField(
-                                    "输入照片文字…",
+                                    "Enter photo caption…",
                                     text: Binding(
                                         get: { captionDraft },
                                         set: { captionDraft = limitedCaption($0) }
@@ -286,7 +315,7 @@ struct ContentView: View {
                                     VStack(spacing: 2) {
                                         Image(systemName: speech.isListening ? "mic.fill" : "mic")
                                             .font(.title2.weight(.bold))
-                                        Text(speech.isListening ? "正在听…" : "语音")
+                                        Text(speech.isListening ? "Listening…" : "Voice")
                                             .font(.caption2.weight(.bold))
                                     }
                                     .foregroundStyle(speech.isListening ? .red : .white)
@@ -297,9 +326,9 @@ struct ContentView: View {
                                 if !speech.errorMessage.isEmpty {
                                     Text(speech.errorMessage).foregroundStyle(.yellow)
                                 } else if captionDraft.count >= captionCharacterLimit - 15 {
-                                    Text("即将达到文字上限").foregroundStyle(.yellow)
+                                    Text("Approaching character limit").foregroundStyle(.yellow)
                                 } else {
-                                    Text("第二次点击画面结束输入")
+                                    Text("Tap the camera view again to finish")
                                 }
                                 Spacer()
                                 Text("\(captionDraft.count)/\(captionCharacterLimit)")
@@ -369,41 +398,65 @@ struct ContentView: View {
 
     private var cameraToolbar: some View {
         HStack(spacing: 12) {
-            Menu {
-                ForEach(PhotoRatio.allCases) { ratio in
-                    Button(ratio.rawValue) { photoRatio = ratio }
-                }
-            } label: {
-                cameraToolButton(title: photoRatio.rawValue, icon: "aspectratio")
-            }
-            .disabled(shootingModeLocked)
-
-            Menu {
-                ForEach(CameraFlashMode.allCases) { mode in
-                    Button {
-                        flashMode = mode
-                    } label: {
-                        Label(mode.rawValue, systemImage: mode.systemImage)
-                    }
-                }
-            } label: {
-                cameraToolButton(title: "Flash \(flashMode.rawValue)", icon: flashMode.systemImage)
-            }
-            .disabled(shootingModeLocked)
-
-            Button {
-                let switchingToFront = camera.cameraPosition == .back
-                camera.switchCamera()
-                if switchingToFront {
-                    flashMode = .off
-                }
-            } label: {
-                cameraToolButton(
-                    title: camera.cameraPosition == .back ? "后置镜头" : "前置镜头",
-                    icon: camera.isSwitchingCamera ? "hourglass" : "camera.rotate.fill"
+            if shootingModeLocked {
+                inactiveCameraToolButton(
+                    title: photoRatio.rawValue,
+                    icon: "aspectratio",
+                    accessibilityLabel: "Photo ratio unavailable while mode is locked"
                 )
+            } else {
+                Menu {
+                    ForEach(PhotoRatio.allCases) { ratio in
+                        Button(ratio.rawValue) { photoRatio = ratio }
+                    }
+                } label: {
+                    cameraToolButton(title: photoRatio.rawValue, icon: "aspectratio")
+                }
             }
-            .disabled(shootingModeLocked || isCapturing || camera.isSwitchingCamera)
+
+            if shootingModeLocked {
+                inactiveCameraToolButton(
+                    title: "Flash \(flashMode.rawValue)",
+                    icon: flashMode.systemImage,
+                    accessibilityLabel: "Flash unavailable while mode is locked"
+                )
+            } else {
+                Menu {
+                    ForEach(CameraFlashMode.allCases) { mode in
+                        Button {
+                            flashMode = mode
+                        } label: {
+                            Label(mode.rawValue, systemImage: mode.systemImage)
+                        }
+                    }
+                } label: {
+                    cameraToolButton(title: "Flash \(flashMode.rawValue)", icon: flashMode.systemImage)
+                }
+            }
+
+            if shootingModeLocked || isCapturing || camera.isSwitchingCamera {
+                inactiveCameraToolButton(
+                    title: nil,
+                    icon: camera.isSwitchingCamera ? "hourglass" : "camera.rotate.fill",
+                    iconFont: .title.weight(.bold),
+                    accessibilityLabel: "Switch camera unavailable"
+                )
+            } else {
+                Button {
+                    let switchingToFront = camera.cameraPosition == .back
+                    camera.switchCamera()
+                    if switchingToFront {
+                        flashMode = .off
+                    }
+                } label: {
+                    cameraToolButton(
+                        title: nil,
+                        icon: "camera.rotate.fill",
+                        iconFont: .title.weight(.bold)
+                    )
+                }
+                .accessibilityLabel(camera.cameraPosition == .back ? "Switch to front camera" : "Switch to rear camera")
+            }
 
             Button {
                 if shootingModeLocked {
@@ -418,25 +471,50 @@ struct ContentView: View {
                 }
             } label: {
                 cameraToolButton(
-                    title: shootingModeLocked ? "模式已锁" : "锁定模式",
-                    icon: shootingModeLocked ? "lock.fill" : "lock.open.fill"
+                    title: nil,
+                    icon: shootingModeLocked ? "lock.fill" : "lock.open.fill",
+                    iconFont: .title.weight(.bold)
                 )
             }
+            .accessibilityLabel(shootingModeLocked ? "Unlock shooting mode" : "Lock shooting mode")
         }
         .padding(.horizontal, 10)
         .frame(maxWidth: .infinity)
     }
 
-    private func cameraToolButton(title: String, icon: String) -> some View {
-        VStack(spacing: 3) {
-            Image(systemName: icon).font(.headline)
-            Text(title).font(.caption2.weight(.bold)).lineLimit(1)
+    private func cameraToolButton(
+        title: String?,
+        icon: String,
+        iconFont: Font = .headline,
+        isEnabled: Bool = true
+    ) -> some View {
+        VStack(spacing: title == nil ? 0 : 3) {
+            Image(systemName: icon).font(iconFont)
+            if let title {
+                Text(title).font(.caption2.weight(.bold)).lineLimit(1)
+            }
         }
-        .foregroundStyle(.red)
+        .foregroundStyle(isEnabled ? .red : .gray)
         .frame(maxWidth: .infinity)
         .frame(height: 54)
-        .background(.black.opacity(0.55), in: RoundedRectangle(cornerRadius: 14))
-        .overlay(RoundedRectangle(cornerRadius: 14).stroke(.yellow, lineWidth: 2.5))
+        .background(.black.opacity(isEnabled ? 0.55 : 0.35), in: RoundedRectangle(cornerRadius: 14))
+        .overlay(
+            RoundedRectangle(cornerRadius: 14)
+                .stroke(isEnabled ? .yellow : .gray.opacity(0.55), lineWidth: 2.5)
+        )
+    }
+
+    private func inactiveCameraToolButton(
+        title: String?,
+        icon: String,
+        iconFont: Font = .headline,
+        accessibilityLabel: String
+    ) -> some View {
+        Button(action: {}) {
+            cameraToolButton(title: title, icon: icon, iconFont: iconFont, isEnabled: false)
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(accessibilityLabel)
     }
 
     private var controls: some View {
@@ -450,7 +528,12 @@ struct ContentView: View {
                     }
                 }
             } label: {
-                controlButton(title: markerKind.rawValue, icon: markerKind.systemImage, active: true)
+                controlButton(
+                    title: markerKind.rawValue,
+                    icon: markerKind.systemImage,
+                    active: true,
+                    isEnabled: !shootingModeLocked
+                )
             }
             .disabled(shootingModeLocked)
 
@@ -461,17 +544,18 @@ struct ContentView: View {
                 }
             }
             .disabled(!camera.isReady || isCapturing)
-            .accessibilityLabel("拍照")
+            .accessibilityLabel("Take photo")
 
             Button { markerEnabled.toggle() } label: {
                 controlButton(
                     title: markerEnabled ? "ON" : "OFF",
                     icon: markerEnabled ? "eye.fill" : "eye.slash.fill",
-                    active: markerEnabled
+                    active: markerEnabled,
+                    isEnabled: !shootingModeLocked
                 )
             }
             .disabled(shootingModeLocked)
-            .accessibilityLabel(markerEnabled ? "关闭标注" : "打开标注")
+            .accessibilityLabel(markerEnabled ? "Turn off annotation" : "Turn on annotation")
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
@@ -479,15 +563,18 @@ struct ContentView: View {
         .background(.black)
     }
 
-    private func controlButton(title: String, icon: String, active: Bool) -> some View {
+    private func controlButton(title: String, icon: String, active: Bool, isEnabled: Bool = true) -> some View {
         VStack(spacing: 5) {
             Image(systemName: icon).font(.title2.weight(.bold))
             Text(title).font(.caption.weight(.bold))
         }
-        .foregroundStyle(active ? .red : .white)
+        .foregroundStyle(isEnabled ? (active ? .red : .white) : .gray)
         .frame(width: 92, height: 62)
-        .background(.white.opacity(0.08), in: RoundedRectangle(cornerRadius: 16))
-        .overlay(RoundedRectangle(cornerRadius: 16).stroke(active ? .yellow : .gray, lineWidth: 3))
+        .background(.white.opacity(isEnabled ? 0.08 : 0.04), in: RoundedRectangle(cornerRadius: 16))
+        .overlay(
+            RoundedRectangle(cornerRadius: 16)
+                .stroke(isEnabled ? (active ? .yellow : .gray) : .gray.opacity(0.55), lineWidth: 3)
+        )
     }
 
     private func dragGesture(in size: CGSize) -> some Gesture {
@@ -515,7 +602,7 @@ struct ContentView: View {
 
     private func takePicture() {
         isCapturing = true
-        statusMessage = "正在拍照…"
+        statusMessage = "Taking photo…"
         let previewMarkerSize = min(cameraPreviewSize.width, cameraPreviewSize.height)
             * 0.24 * fixedMarkerScale
         let screenPlacement = MarkerPlacement(
@@ -553,14 +640,14 @@ struct ContentView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 if saveResult.addedToAlbum {
                     statusMessage = markerEnabled
-                        ? "已保存带标注照片到 Inspection Photos"
-                        : "已保存原始照片到 Inspection Photos"
+                        ? "Saved annotated photo to Arrow Album"
+                        : "Saved original photo to Arrow Album"
                 } else {
-                    statusMessage = "照片已保存；无法加入 Inspection Photos 相册"
+                    statusMessage = "Photo saved, but it could not be added to the Arrow album"
                 }
             } catch {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
-                statusMessage = "保存失败：\(error.localizedDescription)"
+                statusMessage = "Save failed: \(error.localizedDescription)"
             }
             isCapturing = false
             try? await Task.sleep(for: .seconds(2))
