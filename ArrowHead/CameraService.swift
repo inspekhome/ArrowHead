@@ -34,6 +34,21 @@ final class CameraService: NSObject, ObservableObject {
         }
     }
 
+    func restart() {
+        sessionQueue.async { [weak self] in
+            guard
+                let self,
+                !self.session.inputs.isEmpty,
+                !self.session.outputs.isEmpty
+            else { return }
+
+            if self.session.isRunning {
+                self.session.stopRunning()
+            }
+            self.session.startRunning()
+        }
+    }
+
     func capturePhoto(flashMode: CameraFlashMode) async throws -> UIImage {
         guard captureContinuation == nil else {
             throw CameraError.captureAlreadyInProgress

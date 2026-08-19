@@ -7,6 +7,7 @@ private struct RecentPhoto: Identifiable {
 }
 
 struct ContentView: View {
+    @Environment(\.scenePhase) private var scenePhase
     @StateObject private var camera = CameraService()
     @StateObject private var speech = SpeechInputService()
     @AppStorage("selectedMarker") private var storedKind = MarkerKind.arrow.rawValue
@@ -68,6 +69,16 @@ struct ContentView: View {
         }
         .foregroundStyle(.white)
         .onDisappear { camera.stop() }
+        .onChange(of: scenePhase) { _, newPhase in
+            switch newPhase {
+            case .active:
+                camera.restart()
+            case .inactive, .background:
+                camera.stop()
+            @unknown default:
+                break
+            }
+        }
         .task {
             if shootingModeLocked {
                 storedRatio = lockedPhotoRatio
@@ -102,7 +113,7 @@ struct ContentView: View {
                 ScrollView(.horizontal, showsIndicators: false) {
                     LazyHStack(spacing: 8) {
                         if recentPhotos.isEmpty {
-                            Text("拍摄后的照片会显示在这里")
+                            Text("Captured photos appear here")
                                 .font(.caption)
                                 .foregroundStyle(.gray)
                                 .frame(width: 220, height: 70)
@@ -141,7 +152,7 @@ struct ContentView: View {
                     .frame(width: 54, height: 54)
                     .background(.white.opacity(0.12), in: RoundedRectangle(cornerRadius: 14))
             }
-            .accessibilityLabel("关于 ArrowHead 和隐私政策")
+            .accessibilityLabel("About Arrow in Picture and privacy policy")
             .padding(.trailing, 10)
         }
         .frame(height: 82)
@@ -225,9 +236,9 @@ struct ContentView: View {
             ZStack {
                 if camera.permissionDenied {
                     ContentUnavailableView(
-                        "需要相机权限",
+                        "Camera Access Required",
                         systemImage: "camera.fill",
-                        description: Text("请在 iPhone 设置中允许 ArrowHead 使用相机。")
+                        description: Text("Allow Arrow in Picture to use the camera in iPhone Settings.")
                     )
                 } else {
                     CameraPreview(
@@ -277,7 +288,7 @@ struct ContentView: View {
                         VStack(spacing: 4) {
                             HStack(spacing: 10) {
                                 TextField(
-                                    "输入照片文字…",
+                                    "Enter photo caption…",
                                     text: Binding(
                                         get: { captionDraft },
                                         set: { captionDraft = limitedCaption($0) }
@@ -304,7 +315,7 @@ struct ContentView: View {
                                     VStack(spacing: 2) {
                                         Image(systemName: speech.isListening ? "mic.fill" : "mic")
                                             .font(.title2.weight(.bold))
-                                        Text(speech.isListening ? "正在听…" : "语音")
+                                        Text(speech.isListening ? "Listening…" : "Voice")
                                             .font(.caption2.weight(.bold))
                                     }
                                     .foregroundStyle(speech.isListening ? .red : .white)
@@ -315,9 +326,9 @@ struct ContentView: View {
                                 if !speech.errorMessage.isEmpty {
                                     Text(speech.errorMessage).foregroundStyle(.yellow)
                                 } else if captionDraft.count >= captionCharacterLimit - 15 {
-                                    Text("即将达到文字上限").foregroundStyle(.yellow)
+                                    Text("Approaching character limit").foregroundStyle(.yellow)
                                 } else {
-                                    Text("第二次点击画面结束输入")
+                                    Text("Tap the camera view again to finish")
                                 }
                                 Spacer()
                                 Text("\(captionDraft.count)/\(captionCharacterLimit)")
@@ -533,7 +544,7 @@ struct ContentView: View {
                 }
             }
             .disabled(!camera.isReady || isCapturing)
-            .accessibilityLabel("拍照")
+            .accessibilityLabel("Take photo")
 
             Button { markerEnabled.toggle() } label: {
                 controlButton(
@@ -544,7 +555,7 @@ struct ContentView: View {
                 )
             }
             .disabled(shootingModeLocked)
-            .accessibilityLabel(markerEnabled ? "关闭标注" : "打开标注")
+            .accessibilityLabel(markerEnabled ? "Turn off annotation" : "Turn on annotation")
         }
         .frame(maxWidth: .infinity)
         .padding(.horizontal, 18)
@@ -591,7 +602,7 @@ struct ContentView: View {
 
     private func takePicture() {
         isCapturing = true
-        statusMessage = "正在拍照…"
+        statusMessage = "Taking photo…"
         let previewMarkerSize = min(cameraPreviewSize.width, cameraPreviewSize.height)
             * 0.24 * fixedMarkerScale
         let screenPlacement = MarkerPlacement(
@@ -629,14 +640,14 @@ struct ContentView: View {
                 UINotificationFeedbackGenerator().notificationOccurred(.success)
                 if saveResult.addedToAlbum {
                     statusMessage = markerEnabled
-                        ? "已保存带标注照片到 Inspection Photos"
-                        : "已保存原始照片到 Inspection Photos"
+                        ? "Saved annotated photo to Arrow Album"
+                        : "Saved original photo to Arrow Album"
                 } else {
-                    statusMessage = "照片已保存；无法加入 Inspection Photos 相册"
+                    statusMessage = "Photo saved, but it could not be added to the Arrow album"
                 }
             } catch {
                 UINotificationFeedbackGenerator().notificationOccurred(.error)
-                statusMessage = "保存失败：\(error.localizedDescription)"
+                statusMessage = "Save failed: \(error.localizedDescription)"
             }
             isCapturing = false
             try? await Task.sleep(for: .seconds(2))

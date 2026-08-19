@@ -17,17 +17,17 @@
 	<key>ITSAppUsesNonExemptEncryption</key>
 	<false/>
 	<key>CFBundleDisplayName</key>
-	<string>ArrowHead</string>
+	<string>Arrow</string>
 	<key>NSCameraUsageDescription</key>
-	<string>ArrowHead uses the camera to photograph and mark inspection defects.</string>
+	<string>Arrow in Picture uses the camera to photograph and mark inspection defects.</string>
 	<key>NSMicrophoneUsageDescription</key>
-	<string>ArrowHead uses the microphone to add dictated notes to inspection photos.</string>
+	<string>Arrow in Picture uses the microphone to add dictated notes to inspection photos.</string>
 	<key>NSSpeechRecognitionUsageDescription</key>
-	<string>ArrowHead converts dictated inspection notes into text on photos.</string>
+	<string>Arrow in Picture converts dictated inspection notes into text on photos.</string>
 	<key>NSPhotoLibraryAddUsageDescription</key>
-	<string>ArrowHead saves completed inspection pictures to the Inspection Photos album.</string>
+	<string>Arrow in Picture saves completed inspection pictures to the Arrow album.</string>
 	<key>NSPhotoLibraryUsageDescription</key>
-	<string>ArrowHead creates and uses an Inspection Photos album for completed pictures.</string>
+	<string>Arrow in Picture creates and uses an Arrow album for completed pictures.</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>
